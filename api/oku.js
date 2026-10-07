@@ -3,6 +3,8 @@
 //   ANTHROPIC_API_KEY  (zorunlu)  console.anthropic.com'dan alınan anahtar
 //   SITE_SIFRESI       (önerilir) boş bırakılırsa site şifresiz çalışır
 //   CLAUDE_MODEL       (isteğe bağlı) varsayılan: claude-sonnet-5-5
+//   ANTHROPIC_WORKSPACE_ID (kişisel sk-ant-usr-… anahtarlarda gerekli) wrkspc_… ile başlar,
+//                      console.anthropic.com > Settings > Workspaces sayfasındaki ID
 
 const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-5-5';
 
@@ -106,11 +108,15 @@ module.exports = async function handler(req, res) {
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: Object.assign(
+        {
+          'content-type': 'application/json',
+          authorization: 'Bearer ' + apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        // Kişisel (sk-ant-usr-…) anahtarlar çalışma alanı kimliği ister
+        process.env.ANTHROPIC_WORKSPACE_ID ? { 'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID } : {}
+      ),
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 4000,
@@ -132,6 +138,7 @@ module.exports = async function handler(req, res) {
     const data = await r.json();
     if (!r.ok) {
       const msg = data?.error?.message || 'Claude isteği başarısız.';
+      console.error('Claude API hatası', r.status, data?.error?.type, msg);
       const kod = r.status === 429 || r.status === 529 ? 503 : 502;
       return res.status(kod).json({ hata: msg, tekrarDene: kod === 503 });
     }
@@ -140,6 +147,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ sonuc: blok.input, kullanim: data.usage });
   } catch (e) {
+    console.error('Sunucu hatası', e);
     return res.status(500).json({ hata: 'Sunucu hatası: ' + (e && e.message ? e.message : e) });
   }
 };
