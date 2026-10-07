@@ -1,0 +1,7 @@
+{
+  "name": "faturala",
+  "version": "1.0.0",
+  "private": true,
+  "description": "İrsaliye fotoğraflarını Claude ile okuyup Fatura Detay şablonunda Excel üretir.",
+  "engines": { "node": ">=18" }
+}
