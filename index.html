@@ -188,6 +188,12 @@ let sayac = 0;
   el.addEventListener('change', () => { store.set('irs_'+id, el.value); ciz(); });
   el.addEventListener('input', () => { if (id==='ek'||id==='iskonto') ciz(true); });
 });
+// Şifre girilince/değişince, şifre yüzünden takılan fotoğrafları yeniden dene
+$('#sifre').addEventListener('change', () => {
+  let n = 0;
+  fotolar.forEach(f => { if (f.durum === 'err' && /Şifre/.test(f.hata || '')) { f.durum = 'wait'; f.hata = ''; n++; } });
+  if (n) { mesaj(''); fotoCiz(); kuyruk(); }
+});
 
 function mesaj(t, tur){ const m=$('#msg'); m.className='msg '+(t?tur:''); m.textContent=t||''; }
 
