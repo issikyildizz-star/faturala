@@ -43,12 +43,11 @@ Ayrıca belgeden şunları al:
  - irsaliye_tarihi (GG.AA.YYYY)
  - evrak_no: kağıdın üzerine elle yazılmış, genelde daire içindeki sıra numarası; yoksa null.
 
-Sonucu MUTLAKA irsaliye_kaydet aracıyla ver. Uydurma; göremediğin bilgiyi null bırak.`;
+Cevabı verilen JSON şablonunda ver. Uydurma; göremediğin bilgiyi null bırak.`;
 
-const ARAC = {
-  name: 'irsaliye_kaydet',
-  description: 'Okunan irsaliye bilgilerini kaydeder.',
-  input_schema: {
+// Claude'un cevabı bu JSON şablonuna uymak zorunda (structured outputs)
+const SEMA = {
+  schema: {
     type: 'object',
     properties: {
       irsaliye_no: { type: ['string', 'null'] },
@@ -67,11 +66,13 @@ const ARAC = {
             emin_degil: { type: 'boolean' },
             not: { type: ['string', 'null'] },
           },
-          required: ['mal', 'miktar', 'birim_fiyat', 'emin_degil'],
+          required: ['mal', 'miktar', 'birim', 'birim_fiyat', 'emin_degil', 'not'],
+          additionalProperties: false,
         },
       },
     },
-    required: ['satirlar', 'okunabilir'],
+    required: ['irsaliye_no', 'irsaliye_tarihi', 'evrak_no', 'okunabilir', 'satirlar'],
+    additionalProperties: false,
   },
 };
 
@@ -121,14 +122,13 @@ module.exports = async function handler(req, res) {
         model: MODEL,
         max_tokens: 4000,
         system: TALIMAT,
-        tools: [ARAC],
-        tool_choice: { type: 'tool', name: 'irsaliye_kaydet' },
+        output_config: { format: { type: 'json_schema', schema: SEMA.schema } },
         messages: [
           {
             role: 'user',
             content: [
               { type: 'image', source: { type: 'base64', media_type: mt, data: image } },
-              { type: 'text', text: 'Bu irsaliyeyi oku ve irsaliye_kaydet aracıyla kaydet.' },
+              { type: 'text', text: 'Bu irsaliyeyi oku.' },
             ],
           },
         ],
@@ -142,10 +142,16 @@ module.exports = async function handler(req, res) {
       const kod = r.status === 429 || r.status === 529 ? 503 : 502;
       return res.status(kod).json({ hata: msg, tekrarDene: kod === 503 });
     }
-    const blok = (data.content || []).find((b) => b.type === 'tool_use');
-    if (!blok) return res.status(502).json({ hata: 'Claude yapılandırılmış sonuç döndürmedi.' });
+    const metin = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+    let sonuc;
+    try {
+      sonuc = JSON.parse(metin);
+    } catch (e) {
+      console.error('JSON okunamadı', data.stop_reason, metin.slice(0, 300));
+      return res.status(502).json({ hata: 'Claude cevabı okunamadı (' + (data.stop_reason || 'bilinmiyor') + ').' });
+    }
 
-    return res.status(200).json({ sonuc: blok.input, kullanim: data.usage });
+    return res.status(200).json({ sonuc, kullanim: data.usage });
   } catch (e) {
     console.error('Sunucu hatası', e);
     return res.status(500).json({ hata: 'Sunucu hatası: ' + (e && e.message ? e.message : e) });
